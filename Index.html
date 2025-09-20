@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SignalR Chat with Private Messaging</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #messages { border: 1px solid #ccc; height: 200px; overflow-y: auto; padding: 10px; margin-bottom: 10px; }
+    input, button { padding: 8px; margin: 5px; }
+    #user { width: 120px; }
+    #message, #targetUser { width: 200px; }
+  </style>
+</head>
+<body>
+  <h2>SignalR Local Chat</h2>
+
+  <div>
+    <label>Your Name: </label>
+    <input id="user" type="text" placeholder="Enter your name">
+    <button id="connect">Connect</button>
+  </div>
+ 
+
+  <div id="chatUI" style="display:none;">
+    <div id="messages"></div>
+    <input id="message" type="text" placeholder="Type a message">
+    <button id="sendAll">Send to All</button>
+    <br>
+    <select id="userDropdown">
+        <option value="">-- Select User --</option>
+      </select>
+
+    <button id="sendUser">Send to User</button>
+  </div>
+
+  <div>
+    <button id="Fetch">Get Online Users</button>
+  </div>
+
+  <script>
+    let connection;
+    let UserName="";
+
+    // Append messages to chat box
+    function addMessage(text) {
+      const msgDiv = document.getElementById("messages");
+      const p = document.createElement("p");
+      p.textContent = text;
+      msgDiv.appendChild(p);
+      msgDiv.scrollTop = msgDiv.scrollHeight;
+    }
+
+    // Connect button
+    document.getElementById("connect").addEventListener("click", () => {
+      const userName = document.getElementById("user").value.trim();
+      if (!userName) {
+        alert("Please enter a username first.");
+        return;
+      }
+      this.UserName=userName;
+
+      // Build connection with username in query string
+      connection = new signalR.HubConnectionBuilder()
+        .withUrl(`https://localhost:7008/chatHub?username=${encodeURIComponent(userName)}`)
+        .withAutomaticReconnect()
+        .build();
+
+      // Receive broadcast/private messages
+      connection.on("ReceiveMessage", (user, message) => {
+        addMessage(`${user}: ${message}`);
+      });
+
+      // Start connection
+      connection.start() 
+        .then(() => {
+          addMessage("✅ Connected to SignalR hub.");
+          document.getElementById("chatUI").style.display = "block";
+        })
+        .catch(err => console.error("Connection failed: ", err));
+    });
+
+    // Send to All
+    document.getElementById("sendAll").addEventListener("click", () => {
+      const user = document.getElementById("user").value.trim();
+      const msg = document.getElementById("message").value.trim();
+      if (msg) {
+        connection.invoke("SendMessage", user, msg).catch(err => console.error(err));
+        document.getElementById("message").value = "";
+      }
+    });
+
+   // Send to Specific User
+document.getElementById("sendUser").addEventListener("click", () => {
+  const targetUser = document.getElementById("userDropdown").value.trim()
+  const msg = document.getElementById("message").value.trim();
+  console.log("User:",targetUser)
+  console.log("Message:",msg)
+  if (targetUser && msg) {
+    connection.invoke("SendMessageToUser", targetUser, msg)
+      .catch(err => console.error(err));
+    document.getElementById("message").value = "";
+  }
+});
+
+document.getElementById("Fetch").addEventListener("click",()=>{loadUsers()})
+
+
+function loadUsers() {
+      connection.invoke("GetAllUsers").then(users => {
+        const dropdown = document.getElementById("userDropdown");
+        dropdown.innerHTML = `<option value="">-- Select User --</option>`;
+        users.forEach(u => {
+          if (u !== this.UserName) { // don't add self
+            const opt = document.createElement("option");
+            opt.value = u;
+            opt.textContent = u;
+            dropdown.appendChild(opt);
+          }
+        });
+      });
+    }
+
+  </script>
+</body>
+</html>
